@@ -148,3 +148,130 @@ public @interface MyLog {
 
 - 여기서 json API란, 데이터를 JSON 형태로 주고받는 웹 통신 방식이다.  
 이 때 json이란 key-value 형태를 뜻함.
+
+<br>
+<br>
+<br>
+
+# Spring Security
+
+Spring Security는 <b>스프링 기반 애플리케이션의 인증(Authentication)과 인가(Authorization)를 담당하는 보안 프레임워크</b>이다.
+
+스프링 프로젝트에 Spring Security를 추가하면, <mark>기본적으로 모든 요청에 대해 인증을 요구</mark>하도록 동작한다.
+
+ㄴ> 이때 **인증**이란 사용자가 누구인지 확인하는 것이고 (<small>예 : 로그인</small>), **인가**란 인증된 사용자가 어떤 자원에 접근할 수 있는지 권한을 확인하는 것이다.
+
+<br>
+<br>
+
+### 동작 방식
+
+Spring Security는 필터체인 방식으로 동작한다. HTTP 요청이 들어오면 여러 필터를 순서대로 거치며 인증/인가 처리를 한다.
+
+ㄴ> 인증이 완료되면 ``SecurityContextHolder``에 사용자 정보가 저장되고, 이후 요청에서 꺼내 쓸 수 있다.
+
+<br>
+
+ex)
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/login", "/signup").permitAll() // 인증 없이 접근 허용
+                .anyRequest().authenticated()                     // 나머지는 인증 필요
+            );
+        return http.build();
+    }
+}
+```
+
+ㄴ> ``@EnableWebSecurity``를 붙이면 스프링 시큐리티 설정을 직접 커스터마이징 하겠다는 의미
+
+<br>
+<br>
+<br>
+
+# JWT (JSON Web Token)
+
+JWT는 <mark>인증 정보를 JSON 형태로 담아 서버-클라이언트 간에 안전하게 주고받기 위한 토큰</mark>이다.
+
+일반적인 세션 방식은 서버에 로그인 상태를 저장해두는 방식인데, JWT는 <mark>서버에 상태를 저장하지 않고 토큰 자체에 정보를 담는 방식</mark>이다.
+
+ㄴ> 이 방식을 **Stateless** 방식이라고 하며, 서버 부담을 줄이고 확장에 유리하다.
+
+<br>
+<br>
+
+### JWT 구조
+
+JWT는 `.`으로 구분된 세 부분으로 이루어져 있다.
+
+| 구분 | 역할 |
+|---|---|
+| **Header** | 토큰 타입과 암호화 알고리즘 정보 |
+| **Payload** | 실제 담을 데이터 (사용자 ID, 권한 등) |
+| **Signature** | 위·변조 방지를 위한 서명값 |
+
+ㄴ> 단, Payload는 <mark>Base64로 인코딩된 것일 뿐 암호화가 아니기 때문에</mark> 비밀번호 같은 민감한 정보는 담으면 안 된다. <br>
+- 이진 데이터란 텍스트로 변환하는 인코딩 방식을 뜻한다.
+<br>
+<br>
+
+### JWT 동작 흐름
+
+```
+1. 클라이언트 → 서버 : 로그인 요청 (아이디 + 비밀번호)
+2. 서버           : 사용자 확인 후 JWT 생성
+3. 서버 → 클라이언트 : JWT 토큰 발급
+4. 클라이언트 → 서버 : 이후 요청 시 토큰을 Header에 보냄
+5. 서버           : 토큰 서명 검증 후 요청 처리
+```
+
+ㄴ> 토큰은 HTTP 요청 헤더의 ``Authorization`` 에 ``Bearer`` 형식으로 담아 보낸다.
+
+<br>
+<br>
+
+### Spring Security + JWT 연동
+
+Spring Security에서 JWT를 사용하려면 <mark>요청마다 토큰을 검증하는 필터를 직접 만들어서 필터 체인에 추가</mark>해야 한다.
+
+```java
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        String token = resolveToken(request);   // 헤더에서 토큰 꺼내기
+        if (token != null && jwtProvider.validateToken(token)) {
+            Authentication auth = jwtProvider.getAuthentication(token);
+            SecurityContextHolder.getContext().setAuthentication(auth); // 인증 정보 저장
+        }
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+ㄴ> ``OncePerRequestFilter``를 상속하면 요청당 딱 한 번만 실행되는 필터를 만들 수 있다고 한다.
+
+<br>
+<br>
+<br>
+
+## 정리
+
+<mark>Spring Security는 인증/인가를 필터 체인 방식으로 처리</mark>하는 보안 프레임워크이고, <mark>JWT는 서버에 상태를 저장하지 않고 토큰 자체에 사용자 정보를 담아 인증하는 방식</mark>이다. 두 가지를 함께 사용하면 로그인 시 JWT를 발급하고 이후 요청마다 Security 필터에서 사용자를 검증하는 <mark>인증 시스템</mark>를 만들 수 있다.
+
+#### -> 서버가 아닌 클라이언트로 로그인 정보 저장
+
+<br>
+<br>
+<br>
